@@ -390,7 +390,7 @@ Input consisting of
         if (arr_final_tag[i_centroids_single] == 0)
             {
             //if number of pixels in region is out of range
-            if (arr_num_pixels[i_centroids_single] <= STAR_MIN_PIXEL || arr_num_pixels[i_centroids_single] > STAR_MAX_PIXEL)
+            if (arr_num_pixels[i_centroids_single] <= STAR_MIN_PIXEL || arr_num_pixels[i_centroids_single] >= STAR_MAX_PIXEL)
                 continue;   //skip this iteration of loop
 
             //incrementing number of stars and single tagged stars by 1
