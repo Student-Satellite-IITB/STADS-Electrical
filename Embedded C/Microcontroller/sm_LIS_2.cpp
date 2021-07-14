@@ -1,5 +1,24 @@
-#include<sm_header.h>
+//#include<sm_header.h>
+#include<iostream>
+#include<fstream>
+#include<chrono>
+#include<math.h>
+#include<string.h>
+#include<iomanip>
 using namespace std;
+using namespace std::chrono;
+
+#define ANGULAR_FOV 1
+
+
+    // Array to store preprocessed catalogue
+    //double arr_preprocessed_catalogue[188700][4];   // SSP_ID1  SSP_ID2 Angdst_cos  Angdst_deg
+
+    // Array to store processed reference catalogue
+    unsigned int arr_ref_catalogue[188807][3]; // SSP_ID1  SSP_ID2     K_vec
+
+    // Array to store guide catalogue
+    double arr_guide_catalogue[5060][4]; // SSP_ID   x_inertial_vec     y_inertial_vec    z_inertial_vec
 
 float comp_euclidean_distance(double x, double y)
 {
@@ -56,6 +75,9 @@ void sort_centroids(double arr_centroids[100][3], int Ni)
     for (int i_overwrite = 0; i_overwrite < Ni; i_overwrite++)
         arr_centroids[i_overwrite][0] = i_overwrite + 1;
 
+    // Sorting is working as expected. VERIFIED
+    cout << "Sorted array of centroids by radial distance from centre\n\n";
+
     /*
     OUTPUT:
     1. Array of centroids of stars sorted by radial distance from the centre of the sensor
@@ -77,19 +99,26 @@ void gen_3d_unit_vectors(int Ni, double arr_centroids[100][3], double arr_unit_v
     double ux, uy, uz;  // components of a unit vector
     double xu, yu;      // undistorted centroid coordinates in pixels
     double xc = 0, yc = 0;  //  pixel coordinates of the principal point
-    double ppx,ppy;     // pixel pitches of the imager
-    double fmm;         // focal length of the lens in mm
+    // double ppx,ppy;     // pixel pitches of the imager
+    double fmm = 36;         // focal length of the lens in mm
+    // Note: Pixel_width in feature extraction is also set in mm (0.0048mm)
 
     // point of reference and plane of coordinates?
     // Iterative loop to assign body frame unit vectors to each centroid
-    for(int i_assign_unit_vectors; i_assign_unit_vectors<Ni; i_assign_unit_vectors++)
+    for(int i_assign_unit_vectors = 0; i_assign_unit_vectors < Ni; i_assign_unit_vectors++)
     {
         xu = arr_centroids[i_assign_unit_vectors][1];
         yu = arr_centroids[i_assign_unit_vectors][2];
+
         // Refer page 108 Erlank 2013
-        ux = (xu - xc)*ppx/fmm*pow((1 + pow(((xu - xc)*ppx/fmm), 2) + pow(((yu - yc)*ppy/fmm), 2)),-0.5);
-        uy = (yu - yc)*ppy/fmm*pow((1 + pow(((xu - xc)*ppx/fmm), 2) + pow(((yu - yc)*ppy/fmm), 2)),-0.5);
-        uz = pow((1 + pow(((xu - xc)*ppx/fmm), 2) + pow(((yu - yc)*ppy/fmm), 2)),-0.5);
+        // Advanced formula
+        //ux = (xu - xc)*ppx/fmm*pow((1 + pow(((xu - xc)*ppx/fmm), 2) + pow(((yu - yc)*ppy/fmm), 2)),-0.5);
+        //uy = (yu - yc)*ppy/fmm*pow((1 + pow(((xu - xc)*ppx/fmm), 2) + pow(((yu - yc)*ppy/fmm), 2)),-0.5);
+        //uz = pow((1 + pow(((xu - xc)*ppx/fmm), 2) + pow(((yu - yc)*ppy/fmm), 2)),-0.5);
+        // Basic formula
+        ux = xu/fmm*(pow(pow(xu/fmm, 2) + pow(yu/fmm, 2) + 1,-0.5));
+        uy = yu/fmm*(pow(pow(xu/fmm, 2) + pow(yu/fmm, 2) + 1,-0.5));
+        uz = 1*(pow(pow(xu/fmm, 2) + pow(yu/fmm, 2) + 1,-0.5));
 
         arr_unit_vectors[i_assign_unit_vectors][0] = arr_centroids[i_assign_unit_vectors][0];
         arr_unit_vectors[i_assign_unit_vectors][1] = 0;
@@ -97,6 +126,8 @@ void gen_3d_unit_vectors(int Ni, double arr_centroids[100][3], double arr_unit_v
         arr_unit_vectors[i_assign_unit_vectors][3] = uy;
         arr_unit_vectors[i_assign_unit_vectors][4] = uz;
     }
+
+    cout << "Generated 3D unit vectors\n\n";
 
     /*
     OUTPUT:
@@ -108,7 +139,7 @@ void gen_3d_unit_vectors(int Ni, double arr_centroids[100][3], double arr_unit_v
 float comp_ang_dist(double x1, double y1, double z1, double x2, double y2, double z2)
 {
     // Returns angular distance values for given (x1,y1,z1) and (x2,y2,z2)
-    return (pow(pow(x2-x1,2) + pow(y2-y1,2) + pow(z2-z1,2),0.5));
+    return (pow(pow(x2-x1,2) + pow(y2-y1,2) + pow(z2-z1,2), 0.5));
 }
 
 void four_star_matching(double arr_unit_vectors[4][5])
@@ -118,9 +149,10 @@ void four_star_matching(double arr_unit_vectors[4][5])
     1. arr_unit_vectors - FE_ID    SM_ID   x_body_vec   y_body_vec   z_body_vec
     */
 
-    // Array to store processed reference catalogue
+    // Array to store processed reference catalogue. Removed!
     // Even if this array is not loaded onto to the compiler, it needs to be externally accessible
-    double arr_ref_catalogue[188808][3]; // SSP_ID1  SSP_ID2 K_Vec
+    // POSSIBLE ERROR!!! Mismatched understanding of elements in preprocessed catalogue. Corrected!
+    //double arr_ref_catalogue[188807][3]; // SSP_ID1  SSP_ID2 K_Vec
 
     // Temporary variable to store Star ID
     int star_id;
@@ -128,7 +160,7 @@ void four_star_matching(double arr_unit_vectors[4][5])
     int Ngc = 5060;    // number of stars in the guide catalogue
 
     // Array to store values of key elements to be used in the function
-    int arr_p[10];             // 0 <= i <= 5 angular distance    6 <= i <= 9 FE IDs
+    double arr_p[10];             // 0 <= i <= 5 angular distance    6 <= i <= 9 FE IDs
 
     // Array to export FE_IDs and corresponding SM_IDs
     int num_sm_ids;
@@ -161,7 +193,7 @@ void four_star_matching(double arr_unit_vectors[4][5])
                     arr_unit_vectors[3][2], arr_unit_vectors[3][3], arr_unit_vectors[3][4]);          //d24
     arr_p[5] = comp_ang_dist(arr_unit_vectors[2][2], arr_unit_vectors[2][3], arr_unit_vectors[2][4], 
                     arr_unit_vectors[3][2], arr_unit_vectors[3][3], arr_unit_vectors[3][4]);          //d34
-
+    cout<<"Computed angular distances\n";
     // Initialise a zero Star Identification Matrix
     int arr_sim[Ngc][6];
     // Loop to set array elements to zero
@@ -169,32 +201,41 @@ void four_star_matching(double arr_unit_vectors[4][5])
         for(int j_set_zero = 0; j_set_zero < 6; j_set_zero++)
             arr_sim[i_set_zero][j_set_zero] = 0;
 
+    // 
+    int n = 188807;      // Number of entries in the reference catalogue
+    double ymin = 0.974001742955743000;
+    double ymax = 0.999999999992621000;
+    double epsilon = 2.22e-16;
+    double zhi = epsilon * ymax;
+
     // Properties of line for k range vector matching
-    int q;
-    int m;
+    double m = (ymax - ymin + 2*zhi)/(n - 1);
+    cout << m << endl;
+    double q = ymin - m - zhi;
+    cout << q << endl;
 
     // Declaring scalars to define search window size
     // These also capture the essence of n(CSPA)
     double ya, yb;  // Rij_lower, Rij_upper
     int jb, jt;     // k_lower (bottom), k_upper (top)
     int kstart, kend;
-    int e = 2;      // Define Uncertainty Constant
+    double e = 0.0002;      // Define Uncertainty Constant
 
     // Iterative loop to assign arr_sim values by performing k-vector search
     for(int j_cspa = 0; j_cspa < 6; j_cspa++)
-    {            
+    {
         if (arr_p[j_cspa] <= ANGULAR_FOV)
         {
             // To understand the approach, refer "Mortari, Neta - 2000"
             ya = arr_p[j_cspa] - e;
             yb = arr_p[j_cspa] + e;
-
-            jb = (ya - q)/m;
-            jt = (yb - q)/m;
-
+            cout<<ya<<'\t'<<yb<<endl;
+            jb = int((ya - q)/m);       // Floor function
+            jt = int((yb - q)/m) + 1;   // Ceiling function
+            cout<<(ya - q)/m<<'\t'<<jt<<endl;
             kstart = arr_ref_catalogue[jb][2] + 1;
             kend = arr_ref_catalogue[jt][2];
-
+        cout<<j_cspa<<'\t'<<kstart<<'\t'<<kend<<endl;
             // Start assigning values to arr_sim
             for(int k_vector_search = kstart; k_vector_search <= kend; k_vector_search++)
             {
@@ -203,10 +244,11 @@ void four_star_matching(double arr_unit_vectors[4][5])
             }
         }
     }
+    cout<<"Completed k vector range search\n";
 
-    // Define Check condition
+    // Define Check condition. VERIFIED
     int arr_check[4][6] = { {1,1,1,0,0,0}, {1,0,0,1,1,0}, {0,1,0,1,0,1}, {0,0,1,0,1,1}};
-
+    cout<<"Set Check condition\n";
     // Loop to find rows in arr_sim which match the arr_check matrix
     for(int j_check = 0; j_check < Ngc; j_check++)
     {
@@ -258,7 +300,7 @@ void n_star_matching(double arr_unit_vectors[100][5], int Ni)
     */
 
     // Declaring necessary scalars
-    int num_max, num_uis = Ni, num_is = 0, num_th;   // Maximum number of iterations allowed, Number of unidentified stars,
+    int num_max, num_uis = Ni, num_is = 0, num_th = 8;   // Maximum number of iterations allowed, Number of unidentified stars,
                                             // Number of identified stars, Minimum number of stars required to estimate 
                                             // attitude with required attitude
     int num_match = 0, num_circ = 0;        // Number of matched stars by 4-Star Matching, Number of circular shifts in
@@ -276,6 +318,7 @@ void n_star_matching(double arr_unit_vectors[100][5], int Ni)
         // number of identified stars is greater than or equal to the threshold
         if (!((num_uis >= 4) && (num_is < num_th)))
             break;
+        cout<<"Number of unidentified stars > 4\n";
         
         // Nested loop to extract 4 UIS from UIS table
         /*for (int i_extract = 0; i_extract < 4; i_extract++)
@@ -302,9 +345,11 @@ void n_star_matching(double arr_unit_vectors[100][5], int Ni)
             if (k_assign == Ni || arr_uis[k_assign] == -1)
                 k_assign = 0;
         }
+        cout<<"Assigned 4 stars to temporary array\n";
 
         // Invoke four_star_matching() over the just assigned 
         four_star_matching(arr_unit_vectors_new);
+        cout<<"Four star matching run to completion\n";
 
         // Loop to find out the number of stars matched in four_star_matching()
         for (int i_find_num_matched = 0; i_find_num_matched < 4; i_find_num_matched++) 
@@ -358,17 +403,13 @@ void n_star_matching(double arr_unit_vectors[100][5], int Ni)
         }
 
     }
+
+    cout << "Completed n_star_matching YAYY!!\n\n";
     
 }
 
 void sm_LIS(int Ni, double arr_centroids[100][3])
 {   
-    // Array to store processed reference catalogue
-    double arr_ref_catalogue[188808][3]; // SSP_ID1  SSP_ID2     K_Vec
-
-    // Array to store guide catalogue
-    double arr_guide_catalogue[5060][4]; // SSP_ID   x_inertial_vec     y_inertial_vec    z_inertial_vec
-
     // Array to store body frame unit vector values
     double arr_unit_vectors[100][5];    // FE_ID    SM_ID   x_body_vec  y_body_vec  z_body_vec
 
@@ -382,4 +423,83 @@ void sm_LIS(int Ni, double arr_centroids[100][3])
     n_star_matching(arr_unit_vectors, Ni);
 
     return;
+}
+
+int main()
+{
+    // Number of test cases
+    unsigned short int n = 1;
+
+    //arr_image and arr_centroids have been declared under the global scope to prevent stack overflow
+
+    // Loading Reference Catalogue (Array declared globally)
+    ifstream file;
+    cout<<"\n...Loading Reference Star Catalogue 4SM\n";
+    char filename[50] = "sm_Reference_Star_Catalogue_4SM.csv";
+    file.open(filename);
+    for(unsigned int i_file_in = 0; i_file_in < 188807; i_file_in++)
+        for(unsigned short int j_file_in = 0; j_file_in < 4; j_file_in++)
+            file >> arr_ref_catalogue[i_file_in][j_file_in];
+
+    cout<<"Loaded Reference Star Catalogue 4SM\n\n";
+    file.close();
+
+    // Loading Guide Star Catalogue
+    cout<<"...Loading Guide Star Catalogue\n";
+    strcpy(filename, "sm_Guide_Star_Catalogue.csv");
+    file.open(filename);
+    for(unsigned int i_file_in = 0; i_file_in < 5060; i_file_in++)
+        for(unsigned short int j_file_in = 0; j_file_in < 4; j_file_in++)
+            file >> arr_ref_catalogue[i_file_in][j_file_in];
+
+    cout<<"Loaded Guide Star Catalogue\n\n";
+    file.close();
+
+    
+// Number of stars
+int Ni = 29;
+// Array of centroids
+double arr_centroids[100][4];   // fe_id, x_cen, y_cen, sm_id
+double arr_centroids_shrink[100][3];    // fe_id, x_cen, y_cen
+
+//courtesy SZ
+for(unsigned short img_num = 1; img_num <= n; img_num++)
+	{
+    //input from external file
+    ifstream file;
+
+    cout<<"Image: "<<img_num<<endl<<endl;
+
+    char filename[100];
+    sprintf(filename, "Tagging Algorithm Results/4-14/st_input_%i.txt", img_num);
+
+    file.open(filename);
+    for(unsigned short int i_file_in = 0; i_file_in < Ni; i_file_in++)
+        for(unsigned short int j_file_in = 0; j_file_in < 4; j_file_in++)
+            file >> arr_centroids[i_file_in][j_file_in];
+
+    // Centroids are being imported correctly. VERIFIED
+    for(unsigned short int i_arr_shrink = 0; i_arr_shrink < Ni; i_arr_shrink++)
+        for(unsigned short int j_arr_shrink = 0; j_arr_shrink < 3; j_arr_shrink++)
+            arr_centroids_shrink[i_arr_shrink][j_arr_shrink] = arr_centroids[i_arr_shrink][j_arr_shrink];
+
+    //Start time
+    auto start = high_resolution_clock::now();
+
+    //Feature Extraction start
+    sm_LIS(Ni, arr_centroids_shrink);
+    //Feature Extraction end
+
+    //End time
+    auto stop = high_resolution_clock::now();
+
+    //Calculate time
+    auto duration = duration_cast<milliseconds>(stop - start);
+
+    cout<<"Time Taken: "<<duration.count()<<" ms"<<endl<<endl;
+    file.close();
+    }
+
+return 1;
+
 }
