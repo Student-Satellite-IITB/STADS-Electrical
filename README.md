@@ -1,10 +1,10 @@
 # STADS Electrical Repository
-This repository contains all the codes intended to be used on hardware, including VHDL/Verilog, Embedded C, C++ for HLS and bitstreams to program FPGAs.
+This repository contains all the codes intended to be used on hardware written during the process of development, including Verilog, Embedded C, C for HLS and bitstreams to program FPGAs.
 
 ## Organization of codes
 1. Put code in the respective directories following the file nomenclature explained in the [QA Guidelines](https://docs.google.com/document/d/1U63RPCxErLuVvC3BmJ-6Fqa9EqF_KslVQfur7OiazCk/edit).
 2. Appropriate Version Control Practices to be followed as mentioned in the QA Guidelines.
-3. Any arguments to be fed into C/C++ codes to be given as arguments to main and run from the command line. The main should look as follows:
+3. Any arguments to be fed into C codes to be given as arguments to main and run from the command line. The main should look as follows:
 ```
 int main(int argc, char** argv)
 {
